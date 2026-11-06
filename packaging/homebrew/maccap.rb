@@ -9,7 +9,7 @@ cask "maccap" do
   desc "Records calls on your Mac with on-device live notes and next steps"
   homepage "https://github.com/jhammant/maccap"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
   depends_on arch: :arm64
   depends_on formula: "ffmpeg"
 

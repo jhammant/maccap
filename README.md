@@ -66,7 +66,7 @@ and the demo).
 - **Download:** [the latest release](https://github.com/jhammant/maccap/releases/latest)
   has `MacCap-<version>.dmg`, signed with a Developer ID and notarized by Apple.
   Drag MacCap to Applications, then `brew install ffmpeg`.
-- **Homebrew:** `brew install --cask jhammant/tap/maccap` (brings ffmpeg too).
+- **Homebrew:** `brew trust jhammant/tap && brew install --cask jhammant/tap/maccap` (brings ffmpeg too).
 
 ### Build from source
 
