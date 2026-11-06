@@ -2,7 +2,7 @@
 # release, with the version and the sha256 that release.sh prints.
 cask "maccap" do
   version "0.1.0"
-  sha256 "REPLACE_WITH_RELEASE_SHA256"
+  sha256 "d46c791c9b9d200356bbf1e7ee5b8baf10c8c58942f863e3b005b92d5bbe6f46"
 
   url "https://github.com/jhammant/maccap/releases/download/v#{version}/MacCap-#{version}.dmg"
   name "MacCap"

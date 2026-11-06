@@ -61,7 +61,16 @@ The demo records nothing and saves nothing to your recordings folder.
 ## Install
 
 You need an Apple silicon Mac with macOS 15 or later (macOS 26 for live notes
-and the demo), the Xcode command-line tools (`xcode-select --install`), and
+and the demo).
+
+- **Download:** [the latest release](https://github.com/jhammant/maccap/releases/latest)
+  has `MacCap-<version>.dmg`, signed with a Developer ID and notarized by Apple.
+  Drag MacCap to Applications, then `brew install ffmpeg`.
+- **Homebrew:** `brew install --cask jhammant/tap/maccap` (brings ffmpeg too).
+
+### Build from source
+
+You also need the Xcode command-line tools (`xcode-select --install`) and
 ffmpeg (`brew install ffmpeg`).
 
 ```bash
