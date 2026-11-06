@@ -1,0 +1,39 @@
+{
+  "orbital_url": "http://localhost:9022",
+  "token_env": "ORBITAL_TOKEN",
+  "health_path": "/api/actuator/health",
+  "timeout_seconds": 4,
+  "retry_seconds": 30,
+  "max_lookups": 40,
+  "watchlist": ["Northwind Logistics", "Priya Shah"],
+  "ignore": ["Alex Rivera"],
+  "lookups": [
+    {
+      "kind": "person",
+      "query": [
+        "find { Person(PersonName == {name}) } as {",
+        "  name: PersonName",
+        "  role: JobTitle",
+        "  company: CompanyName",
+        "  email: EmailAddress",
+        "}"
+      ],
+      "title": "name",
+      "chips": ["role", "company"]
+    },
+    {
+      "kind": "company",
+      "query": [
+        "find { Company(CompanyName == {name}) } as {",
+        "  name: CompanyName",
+        "  industry: Industry",
+        "  city: CityName",
+        "  website: WebsiteUrl",
+        "}"
+      ],
+      "title": "name",
+      "chips": ["industry", "city"],
+      "link": "website"
+    }
+  ]
+}
