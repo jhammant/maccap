@@ -54,7 +54,9 @@ build/MacCap.app/Contents/MacOS/MacCap demo demo-call.m4a # live window, then me
 ```
 
 The demo records nothing and saves nothing to your recordings folder.
-`--speed 2` plays it twice as fast.
+`--speed 2` plays it twice as fast. This is that call:
+
+<img src="docs/images/maccap.gif" alt="MacCap running the demo call: live transcript, talk time, then Claude Code drafting the follow-ups" width="400">
 
 ## Install
 
