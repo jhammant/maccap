@@ -347,6 +347,8 @@ can't read are logged and skipped; if it stops, the call is still recorded.
 Cards are saved with the notes. `MacCap notes FILE.m4a --help-me --ask "…"`
 replays a recording through it (`--follow-up "…"` then follows that answer up).
 
+[Speakers call assist](integrations/speakers/) names enrolled voices on the call side live and can chain an existing assist with `--then`.
+
 ## Meeting finished
 
 When a call with live notes is saved, a window opens with how the talking went

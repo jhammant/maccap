@@ -43,6 +43,7 @@ final class DemoCommand: NSObject, NSApplicationDelegate {
                                                 attributes: [.posixPermissions: 0o700])
         let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir)
         live.visibleToSharing = true  // a demo is meant to be seen and recorded
+        let call = ReplayCallStem(dir: dir)
         live.startAssist()
         NSApp.activate()
         live.show()
@@ -58,10 +59,13 @@ final class DemoCommand: NSObject, NSApplicationDelegate {
             let n = Int(buffer.frameLength)
             guard n > 0, let data = buffer.floatChannelData else { break }
             live.feed(.mic, Array(UnsafeBufferPointer(start: data[0], count: n)), rate: rate, startHost: position)
-            live.feed(.system, Array(UnsafeBufferPointer(start: data[1], count: n)), rate: rate, startHost: position)
+            let system = Array(UnsafeBufferPointer(start: data[1], count: n))
+            call.append(system, rate: rate, at: position)
+            live.feed(.system, system, rate: rate, startHost: position)
             position += Double(n) / rate
             try await Task.sleep(for: .seconds(Double(n) / rate / speed))
         }
+        call.close()
         try await Task.sleep(for: .seconds(2))  // let the last words reach the transcript
         print("call over; writing the notes")
         live.finish(timeout: 120) {
@@ -78,4 +82,28 @@ final class DemoCommand: NSObject, NSApplicationDelegate {
             print("close the window to finish")
         }
     }
+}
+
+/// A replay's call side written the way a recording writes it: `session.json`
+/// and growing system ADTS segments in the session folder, so an assist that
+/// listens to the call (integrations/speakers) works on `demo` and `notes`
+/// replays too.
+final class ReplayCallStem {
+    private let writer: StemWriter
+
+    init(dir: URL) {
+        var segments: [SegmentRecord] = []
+        writer = StemWriter(name: "system", dir: dir, originHost: 0) { segments.append($0) }
+        writer.open(reason: "start", route: "replay")
+        var manifest = SessionManifest(id: "replay", stamp: Clock.fileStamp(Date()), startedAt: Clock.iso(Date()),
+                                       trigger: "replay", state: "recording", pid: getpid())
+        manifest.systemSegments = segments
+        manifest.save(dir)
+    }
+
+    func append(_ samples: [Float], rate: Double, at seconds: Double) {
+        writer.append(samples, rate: rate, startHost: seconds)
+    }
+
+    func close() { _ = writer.close() }
 }

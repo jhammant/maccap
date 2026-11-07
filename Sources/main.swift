@@ -182,6 +182,7 @@ final class NotesReplayCommand: NSObject, NSApplicationDelegate {
         let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir)
         live.onFinalLine = printLine
         live.onCard = printCard
+        let call = ReplayCallStem(dir: dir)
         live.startAssist()
         guard await live.prepare() else { exit(2) }
         let rate = format.sampleRate
@@ -194,9 +195,12 @@ final class NotesReplayCommand: NSObject, NSApplicationDelegate {
             let n = Int(buffer.frameLength)
             guard n > 0, let data = buffer.floatChannelData else { break }
             live.feed(.mic, Array(UnsafeBufferPointer(start: data[0], count: n)), rate: rate, startHost: position)
-            live.feed(.system, Array(UnsafeBufferPointer(start: data[1], count: n)), rate: rate, startHost: position)
+            let system = Array(UnsafeBufferPointer(start: data[1], count: n))
+            call.append(system, rate: rate, at: position)
+            live.feed(.system, system, rate: rate, startHost: position)
             position += Double(n) / rate
         }
+        call.close()
         print("fed \(String(format: "%.1f", position)) s of audio in \(String(format: "%.1f", Date().timeIntervalSince(started))) s")
         if live.assistView.running && (help || question != nil) {
             try await Task.sleep(for: .seconds(3))  // let the last lines reach the transcript
