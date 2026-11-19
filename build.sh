@@ -16,7 +16,7 @@ cd "$(dirname "$0")"
 # (release.sh sets MACCAP_SKIP_LOCAL_ENV so its own settings win.)
 [ -f build.local.env ] && [ -z "${MACCAP_SKIP_LOCAL_ENV:-}" ] && . ./build.local.env
 
-VERSION="${MACCAP_VERSION:-0.1.0}"
+VERSION="${MACCAP_VERSION:-0.1.1}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 BUNDLE_ID="${MACCAP_BUNDLE_ID:-io.maccap.MacCap}"
 IDENTITY="${MACCAP_SIGN_IDENTITY:--}"

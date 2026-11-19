@@ -1,8 +1,8 @@
 # Homebrew cask for MacCap. Copy into a tap (Casks/maccap.rb) after each
 # release, with the version and the sha256 that release.sh prints.
 cask "maccap" do
-  version "0.1.0"
-  sha256 "d46c791c9b9d200356bbf1e7ee5b8baf10c8c58942f863e3b005b92d5bbe6f46"
+  version "0.1.1"
+  sha256 "38a0feca2510725bad4b2d0fc5b98d87f225ba9e56a66c04700b5751c26b7496"
 
   url "https://github.com/jhammant/maccap/releases/download/v#{version}/MacCap-#{version}.dmg"
   name "MacCap"

@@ -10,7 +10,7 @@ struct FinalizeError: Error, CustomStringConvertible {
 /// Turns a session's raw ADTS segments into one stereo m4a (L = microphone,
 /// R = system audio) plus a `.maccap.json` sidecar. The raw segments stay.
 enum Finalizer {
-    static let version = "0.1.0"
+    static let version = "0.1.1"
     /// Leading frames each AAC segment carries before its first real sample
     /// (encoder delay as ffmpeg decodes Apple's ADTS output). Measured by
     /// `MacCap selftest`, which fails if alignment drifts.
