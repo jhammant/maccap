@@ -579,7 +579,39 @@ struct CallPanelView: View {
     var onAskAbout: (String, String, String?) -> Void = { _, _, _ in }
     /// A follow-up: (question, the answer it follows).
     var onFollowUp: (String, String) -> Void = { _, _ in }
+    /// The call is in another language (a locale identifier).
+    var onLanguage: (String) -> Void = { _ in }
     @State private var tab = Tab.assist
+
+    /// The call's language. Changing it mid-call carries the transcript on in the new one.
+    private var languageMenu: some View {
+        Menu {
+            ForEach(notes.languages, id: \.self, content: languageItem)
+            if !notes.moreLanguages.isEmpty {
+                Divider()
+                Menu("More languages") { ForEach(notes.moreLanguages, id: \.self, content: languageItem) }
+            }
+        } label: {
+            Label(notes.language.map { CallLanguage.shortName($0) } ?? "Language", systemImage: "globe")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(notes.language == nil || notes.switchingLanguage)
+        .help("The language the call is in. Change it mid-call and the transcript carries on in the new one.")
+        .accessibilityLabel("Call language")
+    }
+
+    private func languageItem(_ identifier: String) -> some View {
+        Button {
+            onLanguage(identifier)
+        } label: {
+            if identifier == notes.language {
+                Label(CallLanguage.name(identifier), systemImage: "checkmark")
+            } else {
+                Text(CallLanguage.name(identifier))
+            }
+        }
+    }
 
     /// The transcript; its answers come up in the Assist tab, so it switches there.
     private var notesView: LiveNotesView {
@@ -597,12 +629,15 @@ struct CallPanelView: View {
     var body: some View {
         if assistEnabled {
             VStack(spacing: 0) {
-                Picker("", selection: $tab) {
-                    Text(helper ? "Assist" : "Coach").tag(Tab.assist)
-                    Text("Notes & transcript").tag(Tab.notes)
+                HStack(spacing: 8) {
+                    Picker("", selection: $tab) {
+                        Text(helper ? "Assist" : "Coach").tag(Tab.assist)
+                        Text("Notes & transcript").tag(Tab.notes)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    languageMenu
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 .padding([.horizontal, .top], 12)
                 switch tab {
                 case .assist: AssistView(model: assist, helper: helper, hotkey: hotkey, limit: limit, onHelp: onHelp,
@@ -614,7 +649,14 @@ struct CallPanelView: View {
             }
             .frame(minWidth: 320, minHeight: 480)
         } else {
-            notesView
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    languageMenu
+                }
+                .padding([.horizontal, .top], 12)
+                notesView
+            }
         }
     }
 }

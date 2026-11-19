@@ -20,7 +20,7 @@ enum TopicsPrompt {
         Each transcript line starts with its time [mm:ss]. Reply with one line per part, oldest first, exactly:
         [mm:ss] Title of two to six words
         where [mm:ss] is the time of the part's first line. Titles name the subject ("EU hosting date", \
-        "Priya's volumes"), not "Discussion". No other text.
+        "Priya's volumes"), not "Discussion", in the language the call is in. No other text.
         """
 
     /// One update: the part still open (if any) and the transcript from where it starts.

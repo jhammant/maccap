@@ -233,7 +233,8 @@ recording as `<name>.notes.md`, with the transcript under them.
 
 - **Transcription:** Apple's on-device SpeechTranscriber, one per side.
   Nothing is sent anywhere. The speech model for your language downloads once
-  if it isn't installed.
+  if it isn't installed. For calls in other languages, see
+  [Languages](#languages).
 - **Echo:** on a speakerphone your microphone also hears the call. A line from
   your side that repeats what the call side said at the same moment is left
   out.
@@ -263,6 +264,35 @@ recording as `<name>.notes.md`, with the transcript under them.
 
 If live notes fail, the window and the log say why. The recording carries on
 regardless.
+
+### Languages
+
+Live notes work in any language Apple's transcriber knows, about 45
+languages and regional variants. These include English, Spanish, French,
+German, Italian, Portuguese, Japanese, Korean, Chinese and many Indian
+languages. The notes model is asked to write the notes, parts and moments in
+the language of the call.
+
+- **Pick it in the live window:** the 🌐 menu at the top shows the language
+  being transcribed. If a call turns out to be in another language, pick that
+  one. The transcript carries on in it from that moment, and the lines
+  already written stay as they are. The first time you use a language, Apple
+  downloads its speech model in a few seconds, and transcription carries on
+  in the old language until it is ready.
+- **Or in the menu bar:** **Call language** sets the language the next call
+  starts in. If you're recording, it switches that call too.
+- **It remembers:** a call starts in the language you picked last. The
+  languages you have picked before and the ones your Mac is set to come first
+  in both menus. All the others are under **More languages**.
+- **Before you've picked one:** `live_notes_locale` in `config.json` (for
+  example `"es_ES"`), else your Mac's language.
+- **Limits:** Apple's transcriber hears one language at a time and can't tell
+  which one is being spoken. A call that switches between two languages is
+  only transcribed well in the one you picked. MacCap's own window and menus
+  are in English for now.
+- **Test with a recording:** `MacCap notes FILE.m4a --language es_ES` replays
+  a recording in a language, and `--switch es_ES@90` changes language 90
+  seconds in, as the menu does.
 
 Notes only grow during a call: each update is merged into what is there, so
 an action noted early stays in the list. With `notes_model_url` set, Apple's

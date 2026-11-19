@@ -161,6 +161,10 @@ struct LiveNotesSections: Equatable {
 
     var isEmpty: Bool { keyPoints.isEmpty && questions.isEmpty && actions.isEmpty }
 
+    /// "- none" as a model writes it in the call's language.
+    static let noneWords: Set<String> = ["none", "ninguno", "ninguna", "nada", "aucun", "aucune", "rien",
+                                         "nessuno", "niente", "nenhum", "nenhuma", "keine", "nichts"]
+
     static func parse(_ reply: String) -> LiveNotesSections {
         var notes = LiveNotesSections()
         var current: WritableKeyPath<LiveNotesSections, [String]>? = nil
@@ -172,7 +176,7 @@ struct LiveNotesSections: Equatable {
             if heading.hasPrefix("QUESTIONS") { current = \.questions; continue }
             if heading.hasPrefix("ACTIONS") { current = \.actions; continue }
             let item = line.trimmingCharacters(in: CharacterSet(charactersIn: "-*•· \t"))
-            guard !item.isEmpty, item.lowercased() != "none" else { continue }
+            guard !item.isEmpty, !Self.noneWords.contains(item.lowercased()) else { continue }
             if let current { notes[keyPath: current].append(item) } else { loose.append(item) }
         }
         if notes.isEmpty { notes.keyPoints = loose }
@@ -218,6 +222,12 @@ struct LiveNotesSections: Equatable {
         "the", "a", "an", "to", "of", "by", "for", "and", "or", "on", "in", "at", "with", "about", "is", "are",
         "be", "will", "would", "should", "we", "you", "them", "they", "i", "it", "that", "this", "their", "our",
         "your", "has", "have", "can", "do", "does", "from", "as", "up",
+        // Spanish, French, Italian, Portuguese and German: calls in those languages repeat less.
+        "el", "la", "los", "las", "un", "una", "de", "del", "al", "y", "o", "en", "con", "por", "para", "que", "es",
+        "se", "lo", "le", "su", "sus", "nos", "yo", "te", "me", "mi", "este", "esta", "ese", "esa", "les", "des",
+        "du", "et", "ou", "à", "au", "aux", "pour", "avec", "sur", "est", "nous", "vous", "il", "gli", "di", "da",
+        "per", "è", "e", "os", "um", "uma", "dos", "das", "na", "com", "é", "der", "die", "den", "dem", "und",
+        "oder", "mit", "für", "von", "zu", "ist", "wir", "sie", "ich",
     ]
 
     static func contentWords(_ text: String) -> Set<String> {
@@ -244,7 +254,8 @@ enum LiveNotesPrompt {
         - (Them) or (You): the question
         ACTIONS
         - (You) or (Them): who promised what, with any date
-        Write "- none" under a heading with nothing yet. No other text.
+        Write "- none" under a heading with nothing yet. No other text. Write the bullets in the language \
+        the call is in; keep the three headings exactly as above.
         """
 
     /// The request for one update: the notes so far plus the recent transcript.
@@ -282,7 +293,7 @@ enum MomentPrompt {
         The person using MacCap marked a moment in a live call. From the last lines of the transcript (You = that person), write ONE short \
         sentence: the action, decision or promise in them, saying who does what and by when if a time was said \
         (e.g. "You to send Alex the deck by Friday."). If there is no action, give the point in one sentence. \
-        Reply with the sentence only.
+        Write it in the language the call is in. Reply with the sentence only.
         """
 }
 

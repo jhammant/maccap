@@ -27,6 +27,7 @@ enum SelfTest {
         topics()
         coach()
         notesMerge()
+        languages()
         followUp()
         consent()
         let home = FileManager.default.temporaryDirectory
@@ -579,6 +580,43 @@ enum SelfTest {
         let many = LiveNotesSections(keyPoints: (1...20).map { "Point number \($0) about topic \($0 * 7)" })
         check(LiveNotesSections().merged(with: many).keyPoints.count == LiveNotesSections.maxKeyPoints,
               "notes: key points keep the newest")
+    }
+
+    // MARK: Languages
+
+    private static func languages() {
+        check(CallLanguage.initial(picked: "es_ES", configured: "en_GB") == "es_ES"
+              && CallLanguage.initial(picked: nil, configured: "en_GB") == "en_GB"
+              && CallLanguage.initial(picked: nil, configured: nil) == nil,
+              "language: the last pick wins over live_notes_locale, which wins over the Mac's")
+        let supported = ["en_GB", "en_US", "es_ES", "es_MX", "fr_FR"]
+        check(CallLanguage.match("es-ES", in: supported) == "es_ES"
+              && CallLanguage.match("es", in: supported, region: "MX") == "es_MX"
+              && CallLanguage.match("es", in: supported, region: "GB") == "es_ES"
+              && CallLanguage.match("ja_JP", in: supported) == nil,
+              "language: a Mac language finds its transcriber locale")
+        let (top, more) = CallLanguage.menu(supported: supported, current: "es_ES", recent: ["fr_FR", "es_ES"],
+                                            preferred: ["en-GB", "es"], region: "GB",
+                                            display: Locale(identifier: "en_GB"))
+        check(top == ["es_ES", "fr_FR", "en_GB"] && more == ["en_US", "es_MX"],
+              "language: the one in use, recent picks and the Mac's languages come first, the rest by name")
+        var state = MacCapState()
+        for identifier in ["en_GB", "es_ES", "fr_FR", "de_DE", "it_IT", "pt_BR", "es_ES"] {
+            state.pick(language: identifier)
+        }
+        let saved = (try? JSONEncoder().encode(state)).flatMap { try? JSONDecoder().decode(MacCapState.self, from: $0) }
+        check(saved?.language == "es_ES" && saved?.recentLanguages == ["es_ES", "pt_BR", "it_IT", "de_DE", "fr_FR"],
+              "language: the last pick is kept, with the five before it, newest first")
+        check(LiveNotesSections.sameItem("(You) Enviar la propuesta el viernes", "(You) enviar propuesta viernes")
+              && !LiveNotesSections.sameItem("(You) Enviar la propuesta el viernes", "(Them) Revisar el contrato el lunes"),
+              "language: Spanish notes say the same thing in fewer words, and different ones stay")
+        let notes = LiveNotesSections.parse("KEY POINTS\n- Precio: 12.000 € al año\nQUESTIONS\n- ninguna\nACTIONS\n- ninguno")
+        check(notes.keyPoints == ["Precio: 12.000 € al año"] && notes.questions.isEmpty && notes.actions.isEmpty,
+              "language: \"- ninguno\" is an empty heading")
+        check(LiveNotesPrompt.instructions.contains("language the call is in")
+              && TopicsPrompt.instructions.contains("language the call is in")
+              && MomentPrompt.instructions.contains("language the call is in"),
+              "language: notes, topics and moments are written in the call's language")
     }
 
     // MARK: Meeting finished

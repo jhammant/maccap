@@ -52,6 +52,12 @@ final class LiveTranscriber {
         return locale
     }
 
+    /// Every locale live transcription can listen in, for the language menus.
+    static func supportedLocales() async -> [String] {
+        guard SpeechTranscriber.isAvailable else { return [] }
+        return await SpeechTranscriber.supportedLocales.map(\.identifier)
+    }
+
     /// Sets up the input stream and the results reader; samples fed after
     /// this are kept. `run` then starts the analysis.
     func prepare() async throws {

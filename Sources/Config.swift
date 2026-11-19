@@ -61,7 +61,8 @@ struct MacCapConfig: Codable {
     var ffmpegPath: String?
     /// The live-notes window during a recording (macOS 26+). On by default.
     var liveNotes: Bool?
-    /// Transcription language for live notes, e.g. "en_GB". Default: the Mac's.
+    /// The language calls start in, e.g. "es_ES", until one is picked in a
+    /// menu (see CallLanguage). Default: the Mac's.
     var liveNotesLocale: String?
     /// An OpenAI-compatible endpoint for the notes, e.g. LM Studio's
     /// "http://localhost:1234/v1". Unset: Apple's on-device model.
@@ -224,8 +225,19 @@ struct MacCapState: Codable {
     /// The person using this Mac agreed, at first launch, to record only
     /// people who have said yes. Nothing is recorded until they have.
     var consentAccepted = false
+    /// The call language picked last (a locale identifier such as "es_ES");
+    /// nil until one is picked, so `live_notes_locale` or the Mac's own applies.
+    var language: String?
+    /// Languages picked before, newest first, shown first in the menus.
+    var recentLanguages: [String] = []
 
     init() {}
+
+    /// Remember a language picked in a menu: the next call starts in it.
+    mutating func pick(language identifier: String) {
+        language = identifier
+        recentLanguages = Array(([identifier] + recentLanguages.filter { $0 != identifier }).prefix(5))
+    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -235,6 +247,8 @@ struct MacCapState: Codable {
         loginItemPath = try container.decodeIfPresent(String.self, forKey: .loginItemPath)
         visibleToSharing = try container.decodeIfPresent(Bool.self, forKey: .visibleToSharing) ?? false
         consentAccepted = try container.decodeIfPresent(Bool.self, forKey: .consentAccepted) ?? false
+        language = try container.decodeIfPresent(String.self, forKey: .language)
+        recentLanguages = try container.decodeIfPresent([String].self, forKey: .recentLanguages) ?? []
     }
 
     static func load(from url: URL) -> MacCapState {

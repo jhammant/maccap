@@ -29,6 +29,8 @@ func usage() {
       MacCap notes FILE.m4a        replay a recording through live notes; print the transcript and notes
              [--help-me] [--ask Q]   then ask the call assist for help, or ask it a question
              [--follow-up Q]         and follow that answer up with another
+             [--language es_ES]      the language the call is in (default: as a new call would start)
+             [--switch fr_FR@90]     change the language at 90 s, as the live window's language menu does
       MacCap record --seconds N --notes   also take live notes (printed at the end)
       MacCap demo FILE.m4a [--speed X]    play a stereo file (left you, right them) into the live
                                           window, then the meeting-finished window; records nothing
@@ -147,12 +149,22 @@ final class NotesReplayCommand: NSObject, NSApplicationDelegate {
     let question: String?
     /// Then a follow-up to that answer.
     let followUp: String?
+    /// The language to start in, and a change of language part-way ("fr_FR@90").
+    let language: String?
+    let languageSwitch: (identifier: String, at: Double)?
 
-    init(file: URL, help: Bool = false, question: String? = nil, followUp: String? = nil) {
+    init(file: URL, help: Bool = false, question: String? = nil, followUp: String? = nil,
+         language: String? = nil, languageSwitch: String? = nil) {
         self.file = file
         self.help = help
         self.question = question
         self.followUp = followUp
+        self.language = language
+        self.languageSwitch = languageSwitch.flatMap { value in
+            let parts = value.split(separator: "@", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let at = Double(parts[1]) else { return nil }
+            return (parts[0], at)
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -179,7 +191,8 @@ final class NotesReplayCommand: NSObject, NSApplicationDelegate {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("maccap-notes-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir)
+        let state = MacCapState.load(from: paths.state)
+        let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir, language: language ?? state.language)
         live.onFinalLine = printLine
         live.onCard = printCard
         let call = ReplayCallStem(dir: dir)
@@ -190,7 +203,13 @@ final class NotesReplayCommand: NSObject, NSApplicationDelegate {
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else { exit(2) }
         var position = 0.0
         let started = Date()
+        var switched = languageSwitch == nil
         while audio.framePosition < audio.length {
+            if !switched, let change = languageSwitch, position >= change.at {
+                switched = true
+                await live.switchLanguage(to: change.identifier)
+                print("language: \(live.view.language ?? "?") from \(LiveTranscript.stamp(position))")
+            }
             try audio.read(into: buffer, frameCount: chunk)
             let n = Int(buffer.frameLength)
             guard n > 0, let data = buffer.floatChannelData else { break }
@@ -277,7 +296,8 @@ case "notes":
     let app = NSApplication.shared
     app.setActivationPolicy(.prohibited)
     let command = NotesReplayCommand(file: URL(fileURLWithPath: arguments[1]), help: arguments.contains("--help-me"),
-                                     question: option("--ask"), followUp: option("--follow-up"))
+                                     question: option("--ask"), followUp: option("--follow-up"),
+                                     language: option("--language"), languageSwitch: option("--switch"))
     app.delegate = command
     app.run()
 case "demo":

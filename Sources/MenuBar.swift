@@ -21,6 +21,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUs
     private let finalizeQueue = DispatchQueue(label: "maccap.finalize")
     /// The live-notes controller for the current recording (macOS 26+).
     private var liveNotes: AnyObject?
+    /// Every language live transcription can listen in (filled in at launch).
+    private var supportedLanguages: [String] = []
 
     init(paths: MacCapPaths, config: MacCapConfig) {
         self.paths = paths
@@ -47,6 +49,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUs
         Log.shared.write("menu app started; auto \(state.autoPaused ? "paused" : "on"); "
             + "allowlist \(config.effectiveAllowlist.count) entries")
         refreshIcon()
+        if config.liveNotesEnabled, #available(macOS 26.0, *) {
+            Task { @MainActor in self.supportedLanguages = await LiveTranscriber.supportedLocales() }
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
         recoverPending()
         followLoginItem()
@@ -225,8 +230,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUs
             sessionIsAuto = auto
             alerting = false
             if config.liveNotesEnabled, #available(macOS 26.0, *) {
-                let live = LiveNotesController(config: config, originHost: session.originHost, sessionDir: session.dir)
+                let live = LiveNotesController(config: config, originHost: session.originHost, sessionDir: session.dir,
+                                               language: state.language)
                 live.callApps = callers.map(appName)
+                live.recentLanguages = state.recentLanguages
+                live.onLanguage = { [weak self] in self?.keepLanguage($0) }
                 live.onNextCall = { [weak self] in self?.nextCall() }
                 live.visibleToSharing = state.visibleToSharing
                 live.attach(to: session)
@@ -418,6 +426,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUs
             let notes = item("Open live notes when recording", #selector(toggleLiveNotesWindow))
             notes.state = state.showLiveNotes ? .on : .off
             menu.addItem(notes)
+            if !supportedLanguages.isEmpty { menu.addItem(languageMenu()) }
         }
         let login = item("Start at login", #selector(toggleLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -426,6 +435,52 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUs
         menu.addItem(item("Open log", #selector(openLog)))
         menu.addItem(.separator())
         menu.addItem(item("Quit MacCap", #selector(quit)))
+    }
+
+    /// "Call language ▸": the language the next call starts in, and the one
+    /// this call carries on in if a recording is under way.
+    private func languageMenu() -> NSMenuItem {
+        let current = CallLanguage.initial(picked: state.language, configured: config.liveNotesLocale)
+            ?? Locale.current.identifier
+        let selected = CallLanguage.match(current, in: supportedLanguages)
+        let (top, more) = CallLanguage.menu(supported: supportedLanguages, current: selected,
+                                            recent: state.recentLanguages)
+        func entry(_ identifier: String) -> NSMenuItem {
+            let entry = item(CallLanguage.name(identifier), #selector(pickLanguage(_:)))
+            entry.representedObject = identifier
+            entry.state = identifier == selected ? .on : .off
+            return entry
+        }
+        let submenu = NSMenu()
+        top.forEach { submenu.addItem(entry($0)) }
+        if !more.isEmpty {
+            submenu.addItem(.separator())
+            let others = NSMenu()
+            more.forEach { others.addItem(entry($0)) }
+            let othersItem = NSMenuItem(title: "More languages", action: nil, keyEquivalent: "")
+            othersItem.submenu = others
+            submenu.addItem(othersItem)
+        }
+        let parent = NSMenuItem(title: "Call language: \(selected.map { CallLanguage.shortName($0) } ?? "Mac's own")",
+                                action: nil, keyEquivalent: "")
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func pickLanguage(_ sender: NSMenuItem) {
+        guard let identifier = sender.representedObject as? String else { return }
+        keepLanguage(identifier)
+        if #available(macOS 26.0, *), let live = liveNotes as? LiveNotesController {
+            Task { @MainActor in await live.switchLanguage(to: identifier) }
+        }
+    }
+
+    /// The next call starts in the language picked last.
+    private func keepLanguage(_ identifier: String) {
+        guard state.language != identifier else { return }
+        state.pick(language: identifier)
+        state.save(to: paths.state)
+        Log.shared.write("call language: \(identifier)")
     }
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {

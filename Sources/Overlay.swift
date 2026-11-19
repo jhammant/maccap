@@ -35,6 +35,12 @@ final class LiveNotesViewModel: ObservableObject {
     @Published var lines: [Line] = []
     @Published var notes = LiveNotesSections()
     @Published var status = "Starting live notes…"
+    /// The language transcription listens in (a locale identifier), once it runs.
+    @Published var language: String?
+    /// The languages to offer in the live window (see CallLanguage.menu).
+    @Published var languages: [String] = []
+    @Published var moreLanguages: [String] = []
+    @Published var switchingLanguage = false
     @Published var topics: [CallTopic] = []
     /// Lines you picked to ask about, by id.
     @Published var selected: Set<String> = []
@@ -340,6 +346,13 @@ final class LiveNotesController {
     private var hotkey: GlobalHotkey?
     /// Save this call and start the next one (the menu bar app sets it).
     var onNextCall: (() -> Void)?
+    /// The call's language was changed in the live window (the menu bar app keeps it for the next call).
+    var onLanguage: ((String) -> Void)?
+    /// Languages picked before, newest first: offered first.
+    var recentLanguages: [String] = []
+    /// The language asked for at the start (nil: the Mac's own).
+    private let startLanguage: String?
+    private var supportedLanguages: [String] = []
     private var requests = 0
     /// The lines you picked for an Ask or Help, by its card: its follow-ups are about them too.
     private var picked: [String: (focus: String, part: String?)] = [:]
@@ -364,10 +377,12 @@ final class LiveNotesController {
         transcribing && !transcript.lines.contains { $0.stem == .system } && transcript.volatile[.system] == nil
     }
 
-    init(config: MacCapConfig, originHost: Double, sessionDir: URL) {
+    /// `language`: the language picked last, if any (else `live_notes_locale`, else the Mac's).
+    init(config: MacCapConfig, originHost: Double, sessionDir: URL, language: String? = nil) {
         self.config = config
         self.originHost = originHost
         self.sessionDir = sessionDir
+        startLanguage = CallLanguage.initial(picked: language, configured: config.liveNotesLocale)
         model = LiveNotesModels.make(config: config)
         if config.coachEnabled {
             coach = Coach(talkShare: config.coachTalkShare, monologueSeconds: config.coachMonologueSeconds)
@@ -397,24 +412,14 @@ final class LiveNotesController {
     @MainActor
     func prepare() async -> Bool {
         do {
-            let locale = try await LiveTranscriber.prepareLocale(config.liveNotesLocale)
-            for stem in [LiveStem.mic, .system] {
-                let transcriber = LiveTranscriber(stem: stem, locale: locale, originHost: originHost)
-                transcriber.onLine = { [weak self] line, isFinal in
-                    DispatchQueue.main.async { self?.receive(line, isFinal: isFinal) }
-                }
-                try await transcriber.prepare()
-                transcribers.append(transcriber)
-                router.set(stem, transcriber)
-                Task {
-                    do { try await transcriber.run() } catch {
-                        Log.shared.write("live notes: \(stem.rawValue) transcriber stopped: \(error)")
-                    }
-                }
-            }
+            let locale = try await LiveTranscriber.prepareLocale(startLanguage)
+            transcribers = try await startTranscribers(locale)
             transcribing = true
-            view.status = "Listening (\(locale.identifier)) · notes by \(model?.name ?? "no model available")"
+            view.language = locale.identifier
+            listening()
             Log.shared.write("live notes: started (\(locale.identifier), \(model?.name ?? "no notes model"))")
+            supportedLanguages = await LiveTranscriber.supportedLocales()
+            offerLanguages()
             timer = Timer.scheduledTimer(withTimeInterval: config.notesInterval, repeats: true) { [weak self] _ in
                 self?.updateNotes()
                 self?.updateTopics()
@@ -424,6 +429,66 @@ final class LiveNotesController {
             view.status = "Live notes are off: \(error)"
             Log.shared.write("live notes: not started: \(error)")
             return false
+        }
+    }
+
+    /// A transcriber per side in `locale`, each fed from now on.
+    @MainActor
+    private func startTranscribers(_ locale: Locale) async throws -> [LiveTranscriber] {
+        var fresh: [LiveTranscriber] = []
+        for stem in [LiveStem.mic, .system] {
+            let transcriber = LiveTranscriber(stem: stem, locale: locale, originHost: originHost)
+            transcriber.onLine = { [weak self] line, isFinal in
+                DispatchQueue.main.async { self?.receive(line, isFinal: isFinal) }
+            }
+            try await transcriber.prepare()
+            fresh.append(transcriber)
+        }
+        for transcriber in fresh {
+            router.set(transcriber.stem, transcriber)
+            Task {
+                do { try await transcriber.run() } catch {
+                    Log.shared.write("live notes: \(transcriber.stem.rawValue) transcriber stopped: \(error)")
+                }
+            }
+        }
+        return fresh
+    }
+
+    private func offerLanguages() {
+        (view.languages, view.moreLanguages) = CallLanguage.menu(supported: supportedLanguages, current: view.language,
+                                                                 recent: recentLanguages)
+    }
+
+    private func listening() {
+        let language = view.language.map { " in \(CallLanguage.name($0))" } ?? ""
+        view.status = "Listening\(language) · notes by \(model?.name ?? "no model available")"
+    }
+
+    /// The call is in another language: transcription carries on in it from
+    /// now. The old transcribers keep listening until the new ones are ready
+    /// (the first time, Apple downloads the language), then finish their last lines.
+    @MainActor
+    func switchLanguage(to identifier: String) async {
+        guard transcribing, identifier != view.language, !view.switchingLanguage else { return }
+        view.switchingLanguage = true
+        defer { view.switchingLanguage = false }
+        view.status = "Switching to \(CallLanguage.name(identifier))…"
+        do {
+            let locale = try await LiveTranscriber.prepareLocale(identifier)
+            guard router.target(.mic) != nil else { return }  // the call ended meanwhile
+            let old = transcribers
+            transcribers = try await startTranscribers(locale)
+            view.language = locale.identifier
+            listening()
+            Log.shared.write("live notes: language changed to \(locale.identifier)")
+            recentLanguages = [locale.identifier] + recentLanguages.filter { $0 != locale.identifier }
+            offerLanguages()
+            onLanguage?(locale.identifier)
+            for transcriber in old { await transcriber.finish() }
+        } catch {
+            view.status = "Couldn't switch to \(CallLanguage.name(identifier)): \(error)"
+            Log.shared.write("live notes: language change to \(identifier) failed: \(error)")
         }
     }
 
@@ -449,7 +514,10 @@ final class LiveNotesController {
                                      onChoose: { [weak self] in self?.choose($0) },
                                      onHelpWith: { [weak self] in self?.help(focus: $0, part: $1) },
                                      onAskAbout: { [weak self] in self?.ask($0, focus: $1, part: $2) },
-                                     onFollowUp: { [weak self] in self?.followUp($0, on: $1) })
+                                     onFollowUp: { [weak self] in self?.followUp($0, on: $1) },
+                                     onLanguage: { [weak self] identifier in
+                                         Task { @MainActor in await self?.switchLanguage(to: identifier) }
+                                     })
             panel = LiveNotesPanel(rootView: root, size: tabs ? NSSize(width: 380, height: 680)
                                                               : NSSize(width: 360, height: 560),
                                    title: helper ? "MacCap · call assist" : "MacCap · live notes")

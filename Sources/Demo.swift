@@ -41,7 +41,9 @@ final class DemoCommand: NSObject, NSApplicationDelegate {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("maccap-demo-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir)
+        let state = MacCapState.load(from: paths.state)
+        let live = LiveNotesController(config: config, originHost: 0, sessionDir: dir, language: state.language)
+        live.recentLanguages = state.recentLanguages
         live.visibleToSharing = true  // a demo is meant to be seen and recorded
         let call = ReplayCallStem(dir: dir)
         live.startAssist()
